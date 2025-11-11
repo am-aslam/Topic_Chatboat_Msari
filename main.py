@@ -10,9 +10,9 @@ import re
 
 MODEL_PATH = r"models\mistral-7b-instruct-v0.1.Q4_0.gguf"
 
-print(f"🔄 Loading model from {MODEL_PATH} ...")
+print(f"Loading model from {MODEL_PATH} ...")
 if not os.path.exists(MODEL_PATH):
-    raise FileNotFoundError(f"❌ Model file not found at: {MODEL_PATH}")
+    raise FileNotFoundError(f"Model file not found at: {MODEL_PATH}")
 
 llm = Llama(
     model_path=MODEL_PATH,
@@ -21,7 +21,7 @@ llm = Llama(
     chat_format=None
 )
 
-print("✅ Model Loaded Successfully!\n")
+print(" Model Loaded Successfully!\n")
 
 app = FastAPI()
 
@@ -40,7 +40,7 @@ class ChatRequest(BaseModel):
     message: str | None = None
     set_topic: str | None = None
 
-# ---------- Relevance guard (hard rule) ----------
+
 _STOPWORDS = {
     "the","a","an","and","or","but","if","then","than","so","to","of","in","on","for",
     "with","at","by","from","as","is","are","was","were","be","been","being","this",
@@ -52,10 +52,10 @@ _STOPWORDS = {
 _TOKEN_RE = re.compile(r"[A-Za-z0-9]+")
 
 def _normalize(text: str) -> set[str]:
-    # simple tokenization + lowercase + naive stemming + stopword removal
+
     tokens = []
     for t in _TOKEN_RE.findall((text or "").lower()):
-        # naive stem-ish trimming
+
         for suf in ("ing","ed","ly","es","s"):
             if len(t) > 4 and t.endswith(suf):
                 t = t[: -len(suf)]
@@ -69,14 +69,13 @@ def is_related(topic: str, message: str, threshold: float = 0.12) -> bool:
     topic_set = _normalize(topic)
     msg_set = _normalize(message)
     if not topic_set or not msg_set:
-        return True  # don't block empty/degenerate cases
+        return True  
     inter = len(topic_set & msg_set)
     union = len(topic_set | msg_set)
     jaccard = inter / union if union else 0.0
-    # Optional: boost if any exact key phrase from topic appears in message
+
     return jaccard >= threshold
 
-# ---------- Helpers ----------
 def trim_history_text(history: str, max_tokens: int = 1000) -> str:
     """Trim conversation history only, not the topic."""
     words = history.split()
@@ -92,20 +91,19 @@ def summarize_topic_if_long(topic: str, max_words: int = 400) -> str:
     else:
         return " ".join(words[:200]) + " ... " + " ".join(words[-200:])
 
-# ---------- Routes ----------
+
 @app.post("/chat")
 def chat(req: ChatRequest):
     session_id = req.session_id or str(uuid.uuid4())
     session = sessions.setdefault(session_id, {"topic": None, "history": []})
 
-    # Set/replace topic explicitly
     if req.set_topic:
         session["topic"] = req.set_topic.strip()
         session["history"].clear()
         return {
             "session_id": session_id,
             "topic": session["topic"],
-            "reply": f"✅ Topic set successfully! You can now ask questions about: {session['topic']}"
+            "reply": f"Topic set successfully! You can now ask questions about: {session['topic']}"
         }
 
     if not session["topic"]:
@@ -117,7 +115,6 @@ def chat(req: ChatRequest):
     topic = session["topic"]
     user_msg = (req.message or "").strip()
 
-    # HARD GUARD: refuse unrelated queries before calling the model
     if user_msg and not is_related(topic, user_msg):
         reply = "I can only answer questions related to the given topic."
         session["history"].append({"user": user_msg, "bot": reply})
@@ -127,13 +124,11 @@ def chat(req: ChatRequest):
             "reply": reply
         }
 
-    # Language detect (best-effort)
     try:
         lang = detect(user_msg) if user_msg else "en"
     except:
         lang = "en"
 
-    # Short history for grounding
     history = ""
     for turn in session["history"][-6:]:
         history += f"User: {turn['user']}\nAssistant: {turn['bot']}\n"
@@ -173,7 +168,7 @@ Assistant:
         )
         reply = result["choices"][0]["text"].strip() or "I can only answer questions related to the given topic."
     except ValueError:
-        reply = "⚠️ The combined topic and conversation are too large for this model. Please simplify or shorten slightly."
+        reply = "The combined topic and conversation are too large for this model. Please simplify or shorten slightly."
 
     session["history"].append({"user": user_msg, "bot": reply})
 
@@ -185,7 +180,7 @@ Assistant:
 
 @app.get("/")
 def home():
-    return {"status": "✅ Offline Chatbot Backend Running with Full Topic Support!"}
+    return {"status": "Offline Chatbot Backend Running with Full Topic Support!"}
 
 if __name__ == "__main__":
     import uvicorn
